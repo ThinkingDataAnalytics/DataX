@@ -109,8 +109,8 @@ def getOptionParser():
     return parser
 
 def generateJobConfigTemplate(reader, writer):
-    readerRef = "Please refer to the %s document:\n     https://github.com/alibaba/DataX/blob/master/%s/doc/%s.md \n" % (reader,reader,reader)
-    writerRef = "Please refer to the %s document:\n     https://github.com/alibaba/DataX/blob/master/%s/doc/%s.md \n " % (writer,writer,writer)
+    readerRef = "Please refer to the %s document:\n     https://github.com/ThinkingDataAnalytics/DataX/blob/master/%s/doc/%s.md \n" % (reader,reader,reader)
+    writerRef = "Please refer to the %s document:\n     https://github.com/ThinkingDataAnalytics/DataX/blob/master/%s/doc/%s.md \n " % (writer,writer,writer)
     print readerRef
     print writerRef
     jobGuid = 'Please save the following configuration as a json file and  use\n     python {DATAX_HOME}/bin/datax.py {JSON_FILE_NAME}.json \nto run the job.\n'
