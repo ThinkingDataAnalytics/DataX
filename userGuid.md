@@ -27,7 +27,7 @@ DataX本身作为数据同步框架，将不同数据源的同步抽象为从源
     ```
     自检脚本：
     python {YOUR_DATAX_HOME}/bin/datax.py {YOUR_DATAX_HOME}/job/job.json
-  * 方法二、下载DataX源码，自己编译：[DataX源码](https://github.com/alibaba/DataX)
+  * 方法二、下载DataX源码，自己编译：[DataX源码](https://github.com/ThinkingDataAnalytics/DataX)
     
     (1)、下载DataX源码：
     
@@ -74,10 +74,10 @@ DataX本身作为数据同步框架，将不同数据源的同步抽象为从源
     DataX (UNKNOWN_DATAX_VERSION), From Alibaba !
     Copyright (C) 2010-2015, Alibaba Group. All Rights Reserved.
     Please refer to the streamreader document:
-        https://github.com/alibaba/DataX/blob/master/streamreader/doc/streamreader.md 
+        https://github.com/ThinkingDataAnalytics/DataX/blob/master/streamreader/doc/streamreader.md 
     
     Please refer to the streamwriter document:
-         https://github.com/alibaba/DataX/blob/master/streamwriter/doc/streamwriter.md 
+         https://github.com/ThinkingDataAnalytics/DataX/blob/master/streamwriter/doc/streamwriter.md 
      
     Please save the following configuration as a json file and  use
          python {DATAX_HOME}/bin/datax.py {JSON_FILE_NAME}.json 
@@ -177,7 +177,7 @@ DataX本身作为数据同步框架，将不同数据源的同步抽象为从源
 
 # Contact us
 
-Google Groups: [DataX-user](https://github.com/alibaba/DataX)
+Google Groups: [DataX-user](https://github.com/ThinkingDataAnalytics/DataX)
 
 
 
