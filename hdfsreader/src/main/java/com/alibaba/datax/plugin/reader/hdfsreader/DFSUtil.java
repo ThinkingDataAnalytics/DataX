@@ -1,15 +1,5 @@
 package com.alibaba.datax.plugin.reader.hdfsreader;
 
-import com.alibaba.datax.common.element.*;
-import com.alibaba.datax.common.exception.DataXException;
-import com.alibaba.datax.common.plugin.RecordSender;
-import com.alibaba.datax.common.plugin.TaskPluginCollector;
-import com.alibaba.datax.common.util.Configuration;
-import com.alibaba.datax.plugin.unstructuredstorage.reader.ColumnEntry;
-import com.alibaba.datax.plugin.unstructuredstorage.reader.UnstructuredStorageReaderErrorCode;
-import com.alibaba.datax.plugin.unstructuredstorage.reader.UnstructuredStorageReaderUtil;
-import com.alibaba.fastjson.JSON;
-import com.alibaba.fastjson.JSONObject;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileStatus;
@@ -25,37 +15,67 @@ import org.apache.hadoop.hive.serde2.columnar.BytesRefArrayWritable;
 import org.apache.hadoop.hive.serde2.columnar.BytesRefWritable;
 import org.apache.hadoop.hive.serde2.objectinspector.StructField;
 import org.apache.hadoop.hive.serde2.objectinspector.StructObjectInspector;
-import org.apache.hadoop.io.*;
-import org.apache.hadoop.mapred.*;
+import org.apache.hadoop.io.IOUtils;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.SequenceFile;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.mapred.FileInputFormat;
+import org.apache.hadoop.mapred.FileSplit;
+import org.apache.hadoop.mapred.InputFormat;
+import org.apache.hadoop.mapred.InputSplit;
+import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapred.RecordReader;
+import org.apache.hadoop.mapred.Reporter;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.util.ReflectionUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Properties;
+import java.util.Set;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.alibaba.datax.common.element.BoolColumn;
+import com.alibaba.datax.common.element.Column;
+import com.alibaba.datax.common.element.DateColumn;
+import com.alibaba.datax.common.element.DoubleColumn;
+import com.alibaba.datax.common.element.LongColumn;
+import com.alibaba.datax.common.element.Record;
+import com.alibaba.datax.common.element.StringColumn;
+import com.alibaba.datax.common.exception.DataXException;
+import com.alibaba.datax.common.plugin.RecordSender;
+import com.alibaba.datax.common.plugin.TaskPluginCollector;
+import com.alibaba.datax.common.util.Configuration;
+import com.alibaba.datax.plugin.unstructuredstorage.reader.ColumnEntry;
+import com.alibaba.datax.plugin.unstructuredstorage.reader.UnstructuredStorageReaderErrorCode;
+import com.alibaba.datax.plugin.unstructuredstorage.reader.UnstructuredStorageReaderUtil;
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
 
 /**
  * Created by mingya.wmy on 2015/8/12.
  */
 public class DFSUtil {
+    public static final String HDFS_DEFAULTFS_KEY = "fs.defaultFS";
+    public static final String HADOOP_SECURITY_AUTHENTICATION_KEY = "hadoop.security.authentication";
     private static final Logger LOG = LoggerFactory.getLogger(HdfsReader.Job.class);
-
+    private static final int DIRECTORY_SIZE_GUESS = 16 * 1024;
     private org.apache.hadoop.conf.Configuration hadoopConf = null;
     private String specifiedFileType = null;
     private Boolean haveKerberos = false;
     private String kerberosKeytabFilePath;
     private String kerberosPrincipal;
-
-
-    private static final int DIRECTORY_SIZE_GUESS = 16 * 1024;
-
-    public static final String HDFS_DEFAULTFS_KEY = "fs.defaultFS";
-    public static final String HADOOP_SECURITY_AUTHENTICATION_KEY = "hadoop.security.authentication";
-
+    private HashSet<String> sourceHDFSAllFilesList = new HashSet<String>();
 
     public DFSUtil(Configuration taskConfig) {
         hadoopConf = new org.apache.hadoop.conf.Configuration();
@@ -99,7 +119,7 @@ public class DFSUtil {
     /**
      * 获取指定路径列表下符合条件的所有文件的绝对路径
      *
-     * @param srcPaths          路径列表
+     * @param srcPaths 路径列表
      * @param specifiedFileType 指定文件类型
      */
     public HashSet<String> getAllFiles(List<String> srcPaths, String specifiedFileType) {
@@ -114,8 +134,6 @@ public class DFSUtil {
         }
         return sourceHDFSAllFilesList;
     }
-
-    private HashSet<String> sourceHDFSAllFilesList = new HashSet<String>();
 
     public HashSet<String> getHDFSAllFiles(String hdfsPath) {
 
@@ -332,25 +350,26 @@ public class DFSUtil {
                 //Each file as a split
                 //TODO multy threads
                 InputSplit[] splits = in.getSplits(conf, 1);
+                for (InputSplit split : splits) {
+                    RecordReader reader = in.getRecordReader(splits[0], conf, Reporter.NULL);
+                    Object key = reader.createKey();
+                    Object value = reader.createValue();
+                    // 获取列信息
+                    List<? extends StructField> fields = inspector.getAllStructFieldRefs();
 
-                RecordReader reader = in.getRecordReader(splits[0], conf, Reporter.NULL);
-                Object key = reader.createKey();
-                Object value = reader.createValue();
-                // 获取列信息
-                List<? extends StructField> fields = inspector.getAllStructFieldRefs();
+                    List<Object> recordFields;
+                    while (reader.next(key, value)) {
+                        recordFields = new ArrayList<Object>();
 
-                List<Object> recordFields;
-                while (reader.next(key, value)) {
-                    recordFields = new ArrayList<Object>();
-
-                    for (int i = 0; i <= columnIndexMax; i++) {
-                        Object field = inspector.getStructFieldData(value, fields.get(i));
-                        recordFields.add(field);
+                        for (int i = 0; i <= columnIndexMax; i++) {
+                            Object field = inspector.getStructFieldData(value, fields.get(i));
+                            recordFields.add(field);
+                        }
+                        transportOneRecord(column, recordFields, recordSender,
+                                taskPluginCollector, isReadAllColumns, nullFormat);
                     }
-                    transportOneRecord(column, recordFields, recordSender,
-                            taskPluginCollector, isReadAllColumns, nullFormat);
+                    reader.close();
                 }
-                reader.close();
             } catch (Exception e) {
                 String message = String.format("从orcfile文件路径[%s]中读取数据发生异常，请联系系统管理员。"
                         , sourceOrcFilePath);
@@ -510,10 +529,6 @@ public class DFSUtil {
             }
         }
         return maxIndex;
-    }
-
-    private enum Type {
-        STRING, LONG, BOOLEAN, DOUBLE, DATE,
     }
 
     public boolean checkHdfsFileType(String filepath, String specifiedFileType) {
@@ -687,6 +702,10 @@ public class DFSUtil {
             LOG.info(String.format("检查文件类型: [%s] 不是Sequence File.", filepath));
         }
         return false;
+    }
+
+    private enum Type {
+        STRING, LONG, BOOLEAN, DOUBLE, DATE,
     }
 
 }
